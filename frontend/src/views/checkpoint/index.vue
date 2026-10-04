@@ -63,6 +63,32 @@
       </tbody>
     </table>
 
+    <section class="panel">
+      <h3>核查项（与防火宣传归档、检查站待办同步生成）</h3>
+      <p class="panel-hint">宣传活动确认完成归档后自动生成覆盖核查；检查站升级检查、等待换岗等待办同步列入。处置结果只记录在核查清单，不回改业务状态。</p>
+      <table class="data-table">
+        <thead>
+          <tr><th>来源</th><th>核查事项</th><th>明细</th><th>日期</th><th>状态</th><th>操作</th></tr>
+        </thead>
+        <tbody>
+          <tr v-for="item in checkItems" :key="item.id">
+            <td>{{ item.source === 'campaign' ? '宣传归档' : '检查站待办' }}</td>
+            <td>{{ item.title }}</td>
+            <td>{{ item.detail }}</td>
+            <td>{{ item.date || '—' }}</td>
+            <td>{{ item.pending ? '待核查' : '已核查' }}</td>
+            <td class="row-actions">
+              <button v-if="item.pending" class="link" type="button" @click="markCheck(item.id, true)">标记已核查</button>
+              <button v-else class="link" type="button" @click="markCheck(item.id, false)">撤销处置</button>
+            </td>
+          </tr>
+          <tr v-if="!checkItems.length">
+            <td colspan="6" class="empty-state">暂无核查项</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
     <footer class="page-foot">
       <span>共 {{ total }} 条防火检查站记录</span>
       <span v-if="errorMessage" class="error-text">{{ errorMessage }}</span>
@@ -79,19 +105,26 @@ import {
   moduleMeta,
   runAction as applyAction,
 } from '@/api/local-service'
+import { buildCheckItems, setCheckDone } from '@/data/campaign-service'
+import type { CheckItem } from '@/data/campaign-types'
 import type { EntryRow } from '@/data/types'
 
 const meta = moduleMeta('checkpoint')
 const columns = ["站点编号", "站点位置", "值守人员", "检查项目", "通行车辆数", "收缴火种数", "值班日期", "运行状态"]
 const actions = ["升级检查", "关闭站点", "安排换岗"]
 const statuses = ["正常检查", "临时关闭", "升级检查", "等待换岗"]
-const stats = [{"label": "站点总数", "value": 0}, {"label": "正常检查数", "value": 0}, {"label": "收缴火种数", "value": 0}]
 
 const rows = ref<EntryRow[]>([])
 const total = ref(0)
 const errorMessage = ref('')
 const filters = ref<Record<string, string>>({})
 const filterFields = columns.slice(0, 3)
+const checkItems = ref<CheckItem[]>([])
+const stats = computed(() => [
+  { label: '站点总数', value: rows.value.length },
+  { label: '正常检查数', value: rows.value.filter((row) => String(row.status) === '正常检查').length },
+  { label: '待核查事项', value: checkItems.value.filter((item) => item.pending).length },
+])
 const statusSummary = computed(() =>
   statuses.map((status: string) => ({
     status,
@@ -122,12 +155,18 @@ function runAction(action: string, row: EntryRow) {
   reload()
 }
 
+function markCheck(id: string, done: boolean) {
+  setCheckDone(id, done)
+  reload()
+}
+
 function reload() {
   errorMessage.value = ''
   try {
     const payload = listEntries(meta.key, filters.value)
     rows.value = payload.items
     total.value = payload.total
+    checkItems.value = buildCheckItems()
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : '防火检查站列表读取失败'
   }
@@ -135,3 +174,22 @@ function reload() {
 
 onMounted(reload)
 </script>
+
+<style scoped>
+.panel {
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+  margin-top: 16px;
+}
+.panel h3 {
+  margin: 0 0 8px;
+  font-size: 15px;
+}
+.panel-hint {
+  color: var(--muted);
+  font-size: 12px;
+  margin: 0 0 10px;
+}
+</style>

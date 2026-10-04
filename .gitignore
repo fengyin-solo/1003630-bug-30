@@ -85,3 +85,7 @@ desktop.ini
 *.db
 *.pid
 *.seed
+
+# ===== 防火宣传取数链路测试的临时构建目录 =====
+.tmp-test-build/
+
